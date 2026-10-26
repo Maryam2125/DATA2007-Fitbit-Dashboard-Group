@@ -1,6 +1,10 @@
 # Created by https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks,visualstudiocode,pycharm+all
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,jupyternotebooks,visualstudiocode,pycharm+all
 
+
+# Project data (never commit)
+datafolder/
+
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks
 # website: http://jupyter.org/
@@ -291,8 +295,8 @@ pyrightconfig.json
 .history
 .ionide
 
-### Ignore data
-*.csv
 
-
+### Project data ###
+# Raw Fitbit CSVs are too large for GitHub. Download from Moodle into datafolder/
+datafolder/*.csv
 # End of https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks,visualstudiocode,pycharm+all
