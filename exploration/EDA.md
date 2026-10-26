@@ -77,6 +77,7 @@ SleepDay (3) and minuteSleep (543) both have duplicated entries which need to be
 Firstly, the name of each timestamp column is inconsistent and requires formatting specific to the timestamp allocated to that data. Secondly, the timestamp format can vary by file (daily, hourly, per minute and per second). Consequently, careful aggregation is required to enable the aggregation of data across different files - particuarly if different timestamp formats are present. Otherwise, the data type assigned to other value columns appears appropirate. 
 
 ## Initial findings
+
 This section provides a brief overview of some findings that could be incorporated into the health tracker app.
 
 ### Sleep score 
