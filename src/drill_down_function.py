@@ -1,4 +1,11 @@
 import pandas as pd
+from pathlib import Path
+
+DATA_FOLDER = (
+    Path(__file__).resolve().parent.parent
+    / "datafolder"
+    / "FitBit Dataset-20261009"
+)
 
 def build_daily_goal_drilldown(
     step_goal=10000,
@@ -46,10 +53,10 @@ def build_daily_goal_drilldown(
     """
 
     # Load files
-    steps = pd.read_csv("dailySteps_merged.csv")
-    calories = pd.read_csv("dailyCalories_merged.csv")
-    intensity = pd.read_csv("dailyIntensities_merged.csv")
-    sleep = pd.read_csv("sleepDay_merged.csv")
+    steps = pd.read_csv(DATA_FOLDER / "dailySteps_merged.csv")
+    calories = pd.read_csv(DATA_FOLDER / "dailyCalories_merged.csv")
+    intensity = pd.read_csv(DATA_FOLDER / "dailyIntensities_merged.csv")
+    sleep = pd.read_csv(DATA_FOLDER / "sleepDay_merged.csv")
 
     # Standardise activity dates
     steps["ActivityDay"] = pd.to_datetime(steps["ActivityDay"])
@@ -243,13 +250,13 @@ def build_daily_goal_drilldown(
             achievements,
         "best_day": {
             "date":
-                str(best_day["ActivityDay"].date()),
+    best_day["ActivityDay"].strftime("%d %b %Y"),
             "goals_met":
                 int(best_day["goals_met"])
         },
         "worst_day": {
             "date":
-                str(worst_day["ActivityDay"].date()),
+    worst_day["ActivityDay"].strftime("%d %b %Y"),
             "goals_met":
                 int(worst_day["goals_met"])
         }
