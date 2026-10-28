@@ -19,6 +19,9 @@ import streamlit as st
 import behavior_insights as bi
 from load_data import LABELS, PERSON_ID, USER_NAME, load_user_metrics, show
 
+from wellness_tracker import wellness_tracker, GOALS, COLOURS, RINGS
+from drill_down_function import build_daily_goal_drilldown
+
 st.set_page_config(page_title="Fitbit Dashboard", layout="wide")
 
 
@@ -228,7 +231,200 @@ if df.empty:
 
 behavior_insights_section(df, all_data, start, end)
 
-# ---- ADD TEAMMATES' SECTIONS BELOW: write a function like the ones above, then call it here ----
+
+
+# ----------------------------------------------------------------------------
+# wellness tracker
+# ----------------------------------------------------------------------------
+
 st.divider()
-st.header("More insights")
-st.info("More dashboard sections coming soon.")
+st.header("Wellness tracker")
+st.caption(
+    f"Daily Fitbit activity for {USER_NAME} (ID {PERSON_ID}) "
+    f"from {first_day:%d %b %Y} to {last_day:%d %b %Y}"
+)
+
+# colour key, with each ring's daily goal
+key = " &nbsp;&nbsp; ".join(
+    f'<span style="color:{COLOURS[name]}; font-size:1.2em">&#9679;</span> {name} (goal {GOALS[name]:,})'
+    for name in RINGS
+)
+st.markdown(
+    f"{key}<br>"
+    "<small>Rings run from outer to inner. A full ring means the daily goal was reached. "
+    "Days with no data are left blank.</small>",
+    unsafe_allow_html=True,
+)
+
+wellness_tracker(df, picked)
+
+
+# ----------------------------------------------------------------------------
+# Daily goal drill-down
+# ----------------------------------------------------------------------------
+def daily_goal_drilldown_section():
+
+    st.divider()
+    st.header("Daily Goal Drill-Down")
+
+    st.caption(
+        f"Goal performance from {start:%d %b %Y} to {end:%d %b %Y}"
+    )
+
+    results = build_daily_goal_drilldown(
+        start_date=start,
+        end_date=end
+    )
+
+    ach = results["achievements"]
+
+    # KPI cards
+    st.subheader("Goal Summary")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric(
+        "Perfect Days",
+        ach["perfect_days"]
+    )
+
+    col2.metric(
+        "Avg Goals Met",
+        ach["average_goals_met"]
+    )
+
+    col3.metric(
+        "Sleep Goal Days",
+        ach["sleep_goal_days"]
+    )
+
+    col4.metric(
+        "Avg Sleep Score",
+        ach["average_sleep_score"]
+    )
+
+    # Performance insight
+    if ach["average_goals_met"] >= 3:
+        st.success(
+            "Strong performance. Most daily goals were consistently achieved."
+        )
+
+    elif ach["average_goals_met"] >= 2:
+        st.info(
+            "Moderate performance. Some goals were met regularly, but there is room for improvement."
+        )
+
+    else:
+        st.warning(
+            "Goal achievement was generally low during this period."
+        )
+
+    # Best / Worst day
+    st.subheader("Highlights")
+
+    st.caption(
+        "Your strongest and weakest days during the selected period."
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric(
+            "🏆 Best Day",
+            results["best_day"]["date"],
+            f'{results["best_day"]["goals_met"]}/4 goals achieved'
+        )
+
+    with col2:
+        st.metric(
+            "📉 Lowest Day",
+            results["worst_day"]["date"],
+            f'{results["worst_day"]["goals_met"]}/4 goals achieved'
+        )
+
+
+    # Goal distribution
+    st.subheader("Goal Achievement Distribution")
+
+    st.caption(
+        "How many days achieved 0, 1, 2, 3 or 4 daily goals."
+    )
+
+    goal_counts = (
+        results["daily_goal_breakdown"]["goals_met"]
+        .value_counts()
+        .sort_index()
+    )
+
+    st.bar_chart(goal_counts)
+
+    # Weekly trend
+    st.subheader("Weekly Goal Achievement")
+
+    st.caption(
+        "Average goals achieved and sleep score each week."
+    )
+
+    st.line_chart(
+        results["weekly_summary"].set_index("ActivityDay")
+    )
+
+    # Monthly trend
+    st.subheader("Monthly Goal Achievement")
+
+    st.caption(
+        "Long-term goal achievement trends."
+    )
+    st.line_chart(
+        results["monthly_summary"].set_index("ActivityDay")
+    )
+
+    # Daily breakdown table
+    st.subheader("Daily Breakdown")
+
+    st.caption(
+        "Daily activity and goal achievement details."
+    )
+
+    display_df = (
+        results["daily_goal_breakdown"][
+            [
+                "ActivityDay",
+                "StepTotal",
+                "Calories",
+                "FairlyActiveMinutes",
+                "sleep_hours",
+                "sleep_score",
+                "goals_met"
+            ]
+        ]
+        .rename(
+            columns={
+                "ActivityDay": "Date",
+                "StepTotal": "Steps",
+                "Calories": "Calories",
+                "FairlyActiveMinutes": "Active Minutes",
+                "sleep_hours": "Sleep Hours",
+                "sleep_score": "Sleep Score",
+                "goals_met": "Goals Met"
+            }
+        )
+    )
+
+    display_df["Sleep Hours"] = (
+        display_df["Sleep Hours"]
+        .round(1)
+    )
+
+    display_df["Sleep Score"] = (
+        display_df["Sleep Score"]
+        .round(1)
+    )
+
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+daily_goal_drilldown_section()

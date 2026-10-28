@@ -295,8 +295,8 @@ pyrightconfig.json
 .history
 .ionide
 
+
 ### Project data ###
 # Raw Fitbit CSVs are too large for GitHub. Download from Moodle into datafolder/
 datafolder/*.csv
-
 # End of https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks,visualstudiocode,pycharm+all
