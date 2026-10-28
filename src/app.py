@@ -19,6 +19,8 @@ import streamlit as st
 import behavior_insights as bi
 from load_data import LABELS, PERSON_ID, USER_NAME, load_user_metrics, show
 
+from wellness_tracker import wellness_tracker, GOALS, COLOURS, RINGS
+
 st.set_page_config(page_title="Fitbit Dashboard", layout="wide")
 
 
@@ -228,7 +230,30 @@ if df.empty:
 
 behavior_insights_section(df, all_data, start, end)
 
-# ---- ADD TEAMMATES' SECTIONS BELOW: write a function like the ones above, then call it here ----
+
+
+# ----------------------------------------------------------------------------
+# wellness tracker
+# ----------------------------------------------------------------------------
+
 st.divider()
-st.header("More insights")
-st.info("More dashboard sections coming soon.")
+st.header("Wellness tracker")
+st.caption(
+    f"Daily Fitbit activity for {USER_NAME} (ID {PERSON_ID}) "
+    f"from {first_day:%d %b %Y} to {last_day:%d %b %Y}"
+)
+
+# colour key, with each ring's daily goal
+key = " &nbsp;&nbsp; ".join(
+    f'<span style="color:{COLOURS[name]}; font-size:1.2em">&#9679;</span> {name} (goal {GOALS[name]:,})'
+    for name in RINGS
+)
+st.markdown(
+    f"{key}<br>"
+    "<small>Rings run from outer to inner. A full ring means the daily goal was reached. "
+    "Days with no data are left blank.</small>",
+    unsafe_allow_html=True,
+)
+
+wellness_tracker(df, picked)
+
