@@ -4,7 +4,9 @@ def build_daily_goal_drilldown(
     step_goal=10000,
     calorie_goal=2000,
     intensity_goal=30,
-    sleep_goal=8
+    sleep_goal=8,
+    start_date=None,
+    end_date=None
 ):
 
     """
@@ -12,6 +14,12 @@ def build_daily_goal_drilldown(
 
     Loads Fitbit daily datasets, calculates goal achievement,
     generates weekly/monthly summaries, and returns achievement metrics.
+
+    Requirements covered:
+    - R01: User-defined goals
+    - R02: Actual vs target + met/not met indicators
+    - R17: Sleep score (0-10)
+    - R18: KPI metrics
 
     Parameters
     ----------
@@ -50,48 +58,82 @@ def build_daily_goal_drilldown(
 
     # Standardise sleep dates
     sleep["SleepDay"] = pd.to_datetime(sleep["SleepDay"])
-    sleep["ActivityDay"] = sleep["SleepDay"].dt.date
-    sleep["ActivityDay"] = pd.to_datetime(sleep["ActivityDay"])
+    sleep["ActivityDay"] = pd.to_datetime(sleep["SleepDay"].dt.date)
 
     # Convert sleep minutes to hours
-    sleep["sleep_hours"] = sleep["TotalMinutesAsleep"] / 60
+    sleep["sleep_hours"] = (
+        sleep["TotalMinutesAsleep"] / 60
+    )
 
-    # Select required columns
-    sleep = sleep[
-        ["Id", "ActivityDay", "sleep_hours"]
-    ]
-
-    # Handle duplicate sleep entries per day
     sleep = (
-        sleep.groupby(
+        sleep[["Id", "ActivityDay", "sleep_hours"]]
+        .groupby(
             ["Id", "ActivityDay"],
             as_index=False
         )
-        .agg({"sleep_hours": "mean"})
+        .mean()
     )
 
-    # Merge all datasets
+    # Merge datasets
     df = (
         steps
-        .merge(calories, on=["Id", "ActivityDay"])
-        .merge(intensity, on=["Id", "ActivityDay"])
-        .merge(sleep, on=["Id", "ActivityDay"], how="left")
+        .merge(
+            calories,
+            on=["Id", "ActivityDay"]
+        )
+        .merge(
+            intensity,
+            on=["Id", "ActivityDay"]
+        )
+        .merge(
+            sleep,
+            on=["Id", "ActivityDay"],
+            how="left"
+        )
     )
 
-    # Fill missing sleep values
-    df["sleep_hours"] = df["sleep_hours"].fillna(0)
-    
-    # Goal achievement flags
-    df["step_goal_met"] = df["StepTotal"] >= step_goal
-    df["calorie_goal_met"] = df["Calories"] >= calorie_goal
-    df["intensity_goal_met"] = (
-        df["FairlyActiveMinutes"] >= intensity_goal
+    df["sleep_hours"] = (
+        df["sleep_hours"]
+        .fillna(0)
     )
+
+    # Date range filter (R02)
+    if start_date is not None:
+        df = df[
+            df["ActivityDay"]
+            >= pd.to_datetime(start_date)
+        ]
+
+    if end_date is not None:
+        df = df[
+            df["ActivityDay"]
+            <= pd.to_datetime(end_date)
+        ]
+
+    # Sleep score (R17)
+    # Scale against goal and cap at 10
+    df["sleep_score"] = (
+        (df["sleep_hours"] / sleep_goal) * 10
+    ).clip(0, 10).round(1)
+
+    # Goal checks (R02)
+    df["step_goal_met"] = (
+        df["StepTotal"] >= step_goal
+    )
+
+    df["calorie_goal_met"] = (
+        df["Calories"] >= calorie_goal
+    )
+
+    df["intensity_goal_met"] = (
+        df["FairlyActiveMinutes"]
+        >= intensity_goal
+    )
+
     df["sleep_goal_met"] = (
         df["sleep_hours"] >= sleep_goal
     )
 
-    # Number of goals met each day
     goal_columns = [
         "step_goal_met",
         "calorie_goal_met",
@@ -99,14 +141,40 @@ def build_daily_goal_drilldown(
         "sleep_goal_met"
     ]
 
-    df["goals_met"] = df[goal_columns].sum(axis=1)
+    df["goals_met"] = (
+        df[goal_columns]
+        .sum(axis=1)
+    )
+
+    # Daily goal comparison table (R02)
+    daily_goal_breakdown = df[[
+        "ActivityDay",
+        "StepTotal",
+        "Calories",
+        "FairlyActiveMinutes",
+        "sleep_hours",
+        "sleep_score",
+        "step_goal_met",
+        "calorie_goal_met",
+        "intensity_goal_met",
+        "sleep_goal_met",
+        "goals_met"
+    ]].copy()
+
+    daily_goal_breakdown["step_target"] = step_goal
+    daily_goal_breakdown["calorie_target"] = calorie_goal
+    daily_goal_breakdown["intensity_target"] = intensity_goal
+    daily_goal_breakdown["sleep_target"] = sleep_goal
 
     # Weekly summary
     weekly_summary = (
         df
         .set_index("ActivityDay")
-        .resample("W")["goals_met"]
-        .mean()
+        .resample("W")
+        .agg({
+            "goals_met": "mean",
+            "sleep_score": "mean"
+        })
         .reset_index()
     )
 
@@ -114,100 +182,75 @@ def build_daily_goal_drilldown(
     monthly_summary = (
         df
         .set_index("ActivityDay")
-        .resample("M")["goals_met"]
-        .mean()
+        .resample("ME")
+        .agg({
+            "goals_met": "mean",
+            "sleep_score": "mean"
+        })
         .reset_index()
         .rename(
             columns={
-                "goals_met": "average_goals_met"
+                "goals_met":
+                    "average_goals_met",
+                "sleep_score":
+                    "average_sleep_score"
             }
         )
     )
 
-    # Monthly summary
-    monthly_summary = (
-        df
-        .set_index("ActivityDay")
-        .resample("ME")["goals_met"]
-        .mean()
-        .reset_index()
-        .rename(
-            columns={
-                "goals_met": "average_goals_met"
-            }
-        )
-    )
+    # Best / worst day
+    best_day = df.loc[
+        df["goals_met"].idxmax()
+    ]
 
-    # Highlights and low points
-    best_day = df.loc[df["goals_met"].idxmax()]
+    worst_day = df.loc[
+        df["goals_met"].idxmin()
+    ]
 
-    worst_day = df.loc[df["goals_met"].idxmin()]
-
-    # Achievement board
+    # KPI metrics (R18)
     achievements = {
-        "perfect_days": int(
-            (df["goals_met"] == 4).sum()
-        ),
-        "step_goal_days": int(
-            df["step_goal_met"].sum()
-        ),
-        "calorie_goal_days": int(
-            df["calorie_goal_met"].sum()
-        ),
-        "intensity_goal_days": int(
-            df["intensity_goal_met"].sum()
-        ),
-        "sleep_goal_days": int(
-            df["sleep_goal_met"].sum()
-        )
+        "perfect_days":
+            int((df["goals_met"] == 4).sum()),
+
+        "step_goal_days":
+            int(df["step_goal_met"].sum()),
+
+        "calorie_goal_days":
+            int(df["calorie_goal_met"].sum()),
+
+        "intensity_goal_days":
+            int(df["intensity_goal_met"].sum()),
+
+        "sleep_goal_days":
+            int(df["sleep_goal_met"].sum()),
+
+        "average_sleep_score":
+            round(df["sleep_score"].mean(), 1),
+
+        "average_goals_met":
+            round(df["goals_met"].mean(), 2)
     }
 
     return {
         "daily_data": df,
-        "weekly_summary": weekly_summary,
-        "monthly_summary": monthly_summary,
-        "achievements": achievements,
+        "daily_goal_breakdown":
+            daily_goal_breakdown,
+        "weekly_summary":
+            weekly_summary,
+        "monthly_summary":
+            monthly_summary,
+        "achievements":
+            achievements,
         "best_day": {
-            "date": str(best_day["ActivityDay"].date()),
-            "goals_met": int(best_day["goals_met"])
+            "date":
+                str(best_day["ActivityDay"].date()),
+            "goals_met":
+                int(best_day["goals_met"])
         },
         "worst_day": {
-            "date": str(worst_day["ActivityDay"].date()),
-            "goals_met": int(worst_day["goals_met"])
+            "date":
+                str(worst_day["ActivityDay"].date()),
+            "goals_met":
+                int(worst_day["goals_met"])
         }
     }
-
-# Example Streamlit Usage
-# import streamlit as st
-
-# results = build_daily_goal_drilldown()
-
-# st.title("Daily Goals Drill-Down")
-
-# st.subheader("Achievement Board")
-# st.json(results["achievements"])
-
-# st.subheader("Highlights")
-
-# col1, col2 = st.columns(2)
-
-# with col1:
-#     st.write("🏆 Best Day")
-#     st.write(results["best_day"])
-
-# with col2:
-#     st.write("📉 Lowest Day")
-#     st.write(results["worst_day"])
-
-# st.subheader("Daily Breakdown")
-# st.dataframe(results["daily_data"])
-
-# st.subheader("Weekly Summary")
-# st.line_chart(
-#     results["weekly_summary"].set_index("ActivityDay")
-# )
-
-# st.subheader("Monthly Summary")
-# st.bar_chart(
-#     results["monthly_summary"].set_index("ActivityDay")
-# )
