@@ -131,3 +131,7 @@ def show(value, metric):
     if pd.isna(value):
         return "No data"
     return f"{value:.1f}" if metric == "sleep_hours" else f"{value:,.0f}"
+
+def load_all_metrics():
+    """Load + clean, then return everyone's daily metrics (for the friends leaderboard)."""
+    return FitbitData().load().clean().metrics

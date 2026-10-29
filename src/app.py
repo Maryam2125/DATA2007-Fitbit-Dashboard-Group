@@ -22,6 +22,9 @@ from load_data import LABELS, PERSON_ID, USER_NAME, load_user_metrics, show
 from wellness_tracker import wellness_tracker, GOALS, COLOURS, RINGS
 from drill_down_function import build_daily_goal_drilldown
 
+import gamification as gm
+from load_data import load_all_metrics
+
 st.set_page_config(page_title="Fitbit Dashboard", layout="wide")
 
 
@@ -29,6 +32,10 @@ st.set_page_config(page_title="Fitbit Dashboard", layout="wide")
 def get_user_data(user_id):
     """Load once and cache, so changing a filter only re-runs the charts (fast)."""
     return load_user_metrics(user_id)
+
+@st.cache_data
+def get_all_data():
+    return load_all_metrics()
 
 
 def fmt_date(date):
@@ -428,3 +435,74 @@ def daily_goal_drilldown_section():
     )
 
 daily_goal_drilldown_section()
+
+# ----------------------------------------------------------------------------
+# Streaks and leaderboard
+# ----------------------------------------------------------------------------
+def streaks_section(df, start, end):
+    st.subheader("Your streaks")
+    st.caption("Days in a row you hit each goal. A day with no data breaks the streak.")
+    streaks = gm.all_streaks(df, start, end)
+    for col, row in zip(st.columns(len(streaks)), streaks.itertuples()):
+        if row.current is None:
+            col.metric(LABELS[row.metric], "No data")
+            continue
+        days = "day" if row.current == 1 else "days"
+        col.metric(
+            f"{LABELS[row.metric]} streak",
+            f"{row.current} {days}",
+            f"Best: {row.longest} | goal hit {row.days_hit}/{row.days_with_data} days",
+            delta_color="off",
+            delta_arrow="off",
+        )
+    metric = st.selectbox(
+        "Show streak calendar for",
+        list(gm.STREAK_GOALS),
+        format_func=LABELS.get,
+        key="streak_metric",
+    )
+    st.plotly_chart(
+        gm.streak_chart(df, metric, start, end), width="stretch", key="streak_chart"
+    )
+ 
+ 
+def leaderboard_section(all_metrics, start, end):
+    st.subheader("Friends leaderboard")
+    st.caption(
+        f"Average per day for the selected period. You need at least "
+        f"{gm.MIN_LEADERBOARD_DAYS} days of data to be ranked."
+    )
+    metric = st.radio(
+        "Rank by",
+        gm.LEADERBOARD_METRICS,
+        format_func=LABELS.get,
+        horizontal=True,
+        key="leaderboard_metric",
+    )
+    board = gm.leaderboard(all_metrics, metric, start, end)
+    position = gm.your_position(board)
+    if position:
+        st.info(
+            f"You're ranked **{position[0]} of {position[1]}** for {LABELS[metric].lower()}."
+        )
+    else:
+        st.info("Not enough days of data in this period to be ranked.")
+    st.plotly_chart(
+        gm.leaderboard_chart(board, metric), width="stretch", key="leaderboard_chart"
+    )
+ 
+ 
+def gamification_section(start, end):
+    st.divider()
+    st.header("Streaks and leaderboard")
+    # reload the user's days because the wellness tracker fills df's missing values with 0
+    user_days = get_user_data(PERSON_ID)
+    user_days = user_days[
+        (user_days["Date"] >= pd.Timestamp(start))
+        & (user_days["Date"] <= pd.Timestamp(end))
+    ]
+    streaks_section(user_days, start, end)
+    leaderboard_section(get_all_data(), start, end)
+ 
+ 
+gamification_section(start, end)
