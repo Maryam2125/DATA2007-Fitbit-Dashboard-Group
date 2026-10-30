@@ -13,6 +13,7 @@ Every section is a function that is handed the data it needs, so it is easy to a
     all_data = all of the person's days
 """
 
+import plotly.express as px
 import pandas as pd
 import streamlit as st
 
@@ -258,10 +259,10 @@ st.markdown(
 
 wellness_tracker(df, picked)
 
+# ----------------------------------------------------------------------------
+# Daily Goal Drill-Down
+# ----------------------------------------------------------------------------
 
-# ----------------------------------------------------------------------------
-# Daily goal drill-down
-# ----------------------------------------------------------------------------
 def daily_goal_drilldown_section():
 
     st.divider()
@@ -271,14 +272,55 @@ def daily_goal_drilldown_section():
         f"Goal performance from {start:%d %b %Y} to {end:%d %b %Y}"
     )
 
+    # User-configurable goals (R01 + R25)
+    st.subheader("Goal Settings")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        step_goal = st.number_input(
+            "Steps",
+            min_value=1000,
+            value=10000,
+            step=500,
+        )
+
+    with col2:
+        calorie_goal = st.number_input(
+            "Calories",
+            min_value=500,
+            value=2000,
+            step=100,
+        )
+
+    with col3:
+        intensity_goal = st.number_input(
+            "Active Minutes",
+            min_value=0,
+            value=30,
+            step=5,
+        )
+
+    with col4:
+        sleep_goal = st.number_input(
+            "Sleep Hours",
+            min_value=1.0,
+            value=8.0,
+            step=0.5,
+        )
+
     results = build_daily_goal_drilldown(
+        step_goal=step_goal,
+        calorie_goal=calorie_goal,
+        intensity_goal=intensity_goal,
+        sleep_goal=sleep_goal,
         start_date=start,
-        end_date=end
+        end_date=end,
     )
 
     ach = results["achievements"]
 
-    # KPI cards
+    # KPI cards (R18)
     st.subheader("Goal Summary")
 
     col1, col2, col3, col4 = st.columns(4)
@@ -303,7 +345,7 @@ def daily_goal_drilldown_section():
         ach["average_sleep_score"]
     )
 
-    # Performance insight
+    # Insight box
     if ach["average_goals_met"] >= 3:
         st.success(
             "Strong performance. Most daily goals were consistently achieved."
@@ -319,12 +361,8 @@ def daily_goal_drilldown_section():
             "Goal achievement was generally low during this period."
         )
 
-    # Best / Worst day
+    # Highlights
     st.subheader("Highlights")
-
-    st.caption(
-        "Your strongest and weakest days during the selected period."
-    )
 
     col1, col2 = st.columns(2)
 
@@ -342,83 +380,135 @@ def daily_goal_drilldown_section():
             f'{results["worst_day"]["goals_met"]}/4 goals achieved'
         )
 
-
-    # Goal distribution
+    # Goal Distribution Chart (Interactive)
     st.subheader("Goal Achievement Distribution")
-
-    st.caption(
-        "How many days achieved 0, 1, 2, 3 or 4 daily goals."
-    )
 
     goal_counts = (
         results["daily_goal_breakdown"]["goals_met"]
         .value_counts()
         .sort_index()
+        .reset_index()
     )
 
-    st.bar_chart(goal_counts)
+    goal_counts.columns = [
+        "Goals Achieved",
+        "Number of Days"
+    ]
 
-    # Weekly trend
+    fig = px.bar(
+        goal_counts,
+        x="Goals Achieved",
+        y="Number of Days",
+        color="Goals Achieved",
+        title="Distribution of Goals Achieved"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    # Weekly Trend (Interactive)
     st.subheader("Weekly Goal Achievement")
 
-    st.caption(
-        "Average goals achieved and sleep score each week."
+    weekly_fig = px.line(
+        results["weekly_summary"],
+        x="ActivityDay",
+        y=["goals_met", "sleep_score"],
+        markers=True,
+        title="Weekly Goal Achievement Trends"
     )
 
-    st.line_chart(
-        results["weekly_summary"].set_index("ActivityDay")
+    st.plotly_chart(
+        weekly_fig,
+        use_container_width=True
     )
 
-    # Monthly trend
+    # Monthly Trend (Interactive)
     st.subheader("Monthly Goal Achievement")
 
-    st.caption(
-        "Long-term goal achievement trends."
-    )
-    st.line_chart(
-        results["monthly_summary"].set_index("ActivityDay")
+    monthly_fig = px.line(
+        results["monthly_summary"],
+        x="ActivityDay",
+        y=[
+            "average_goals_met",
+            "average_sleep_score"
+        ],
+        markers=True,
+        title="Monthly Goal Achievement Trends"
     )
 
-    # Daily breakdown table
-    st.subheader("Daily Breakdown")
-
-    st.caption(
-        "Daily activity and goal achievement details."
+    st.plotly_chart(
+        monthly_fig,
+        use_container_width=True
     )
+
+    # R02 Actual vs Target Table
+    st.subheader("Daily Goal Breakdown")
 
     display_df = (
         results["daily_goal_breakdown"][
             [
                 "ActivityDay",
                 "StepTotal",
+                "step_target",
+                "step_goal_met",
                 "Calories",
+                "calorie_target",
+                "calorie_goal_met",
                 "FairlyActiveMinutes",
+                "intensity_target",
+                "intensity_goal_met",
                 "sleep_hours",
-                "sleep_score",
-                "goals_met"
+                "sleep_target",
+                "sleep_goal_met",
+                "sleep_score"
             ]
         ]
-        .rename(
-            columns={
-                "ActivityDay": "Date",
-                "StepTotal": "Steps",
-                "Calories": "Calories",
-                "FairlyActiveMinutes": "Active Minutes",
-                "sleep_hours": "Sleep Hours",
-                "sleep_score": "Sleep Score",
-                "goals_met": "Goals Met"
-            }
-        )
     )
 
-    display_df["Sleep Hours"] = (
-        display_df["Sleep Hours"]
-        .round(1)
+    display_df["step_goal_met"] = (
+        display_df["step_goal_met"]
+        .map({True: "✅ Met", False: "❌ Not Met"})
     )
 
-    display_df["Sleep Score"] = (
-        display_df["Sleep Score"]
-        .round(1)
+    display_df["calorie_goal_met"] = (
+        display_df["calorie_goal_met"]
+        .map({True: "✅ Met", False: "❌ Not Met"})
+    )
+
+    display_df["intensity_goal_met"] = (
+        display_df["intensity_goal_met"]
+        .map({True: "✅ Met", False: "❌ Not Met"})
+    )
+
+    display_df["sleep_goal_met"] = (
+        display_df["sleep_goal_met"]
+        .map({True: "✅ Met", False: "❌ Not Met"})
+    )
+
+    display_df.rename(
+        columns={
+            "ActivityDay": "Date",
+            "StepTotal": "Steps",
+            "step_target": "Step Target",
+            "step_goal_met": "Step Goal",
+
+            "Calories": "Calories",
+            "calorie_target": "Calorie Target",
+            "calorie_goal_met": "Calorie Goal",
+
+            "FairlyActiveMinutes": "Active Minutes",
+            "intensity_target": "Active Target",
+            "intensity_goal_met": "Activity Goal",
+
+            "sleep_hours": "Sleep Hours",
+            "sleep_target": "Sleep Target",
+            "sleep_goal_met": "Sleep Goal",
+
+            "sleep_score": "Sleep Score",
+        },
+        inplace=True
     )
 
     st.dataframe(
