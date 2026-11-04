@@ -16,7 +16,7 @@ import pandas as pd
 DATA_FOLDER = (
     Path(__file__).resolve().parent.parent / "datafolder" / "FitBit Dataset-20261009"
 )
-PERSON_ID = int(os.environ.get("FITBIT_PERSON_ID", 1503960366))  # <- our person
+PERSON_ID = int(os.environ.get("FITBIT_PERSON_ID", 2022484408))  # <- our person
 USER_NAME = os.environ.get("FITBIT_USER_NAME", "Athlete")  # dataset has no real names
 
 DATE_FORMAT = "%m/%d/%Y"  # e.g. 4/12/2016

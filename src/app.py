@@ -597,3 +597,9 @@ def gamification_section(start, end):
  
  
 gamification_section(start, end)
+
+st.divider()
+walking_features_section(PERSON_ID, start, end)
+ 
+st.divider()
+derived_features_section(PERSON_ID, start, end)
