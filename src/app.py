@@ -22,6 +22,7 @@ from load_data import LABELS, PERSON_ID, USER_NAME, load_user_metrics, show
 
 from wellness_tracker import wellness_tracker, GOALS, COLOURS, RINGS
 from drill_down_function import build_daily_goal_drilldown
+from derived_features import derived_features_section, walking_features_section
 
 import gamification as gm
 from load_data import load_all_metrics
